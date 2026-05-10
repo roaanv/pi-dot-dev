@@ -1,0 +1,39 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Configuration - Pi Deep Dive</title><link rel="stylesheet" href="styles.css"></head><body><div class="site"><nav><div class="brand">Pi repo<br>deep dive</div><a href="index.html">Start here</a><a href="architecture.html">Architecture</a><a href="agent-loop.html">Agent loop</a><a href="tui-integration.html">TUI integration</a><a class="active" href="configuration.html">Configuration</a><a href="extension-points.html">Extension points</a><a href="llm-integration.html">LLM integration</a><a href="memory-and-tools.html">Memory & tools</a><a href="surfaces.html">Platforms & surfaces</a><a href="change-guide.html">Change guide</a></nav><main>
+<section class="hero"><div class="kicker">Resource loading</div><h1>Configuration is layered by scope, then expanded into resources</h1><p class="lede">Pi starts with user and project settings, resolves package/local/CLI resources, loads extensions first, then skills, prompt templates, themes, context files, and system prompt fragments.</p></section>
+
+<h2>Config locations</h2>
+<div class="grid"><div class="card"><h3>User/global</h3><p>Default global agent dir is <code>~/.pi/agent</code>, overridden by <code>PI_CODING_AGENT_DIR</code>. It contains <code>settings.json</code>, <code>auth.json</code>, <code>models.json</code>, <code>keybindings.json</code>, <code>extensions/</code>, <code>skills/</code>, <code>prompts/</code>, <code>themes/</code>, <code>sessions/</code>.</p></div><div class="card"><h3>Project</h3><p>Project-local config lives under <code>&lt;cwd&gt;/.pi/</code>: settings, extensions, skills, prompts, themes, system prompt files, package installs, and git package checkouts.</p></div><div class="card"><h3>CLI overrides</h3><p>Flags can add or disable extensions, skills, prompt templates, themes, context files, and system prompt fragments. CLI resource paths are resolved before session cwd switches.</p></div></div>
+
+<h2>Settings merge</h2>
+<p><code>SettingsManager.create(cwd, agentDir)</code> loads global and project settings, then deep-merges with project overriding global. Objects merge by key; arrays and primitives replace. Writes are scope-aware and lock-protected.</p>
+<div class="callout"><strong>Gotcha:</strong> settings object merging is not a full semantic merge. Arrays such as resources replace; they do not concatenate across scopes.</div>
+
+<h2>Resource loader order</h2>
+<div class="flow"><ol>
+<li>Reload settings.</li>
+<li>Resolve package resources through <code>DefaultPackageManager</code>.</li>
+<li>Merge CLI/additional resource paths with settings/package/auto-discovered resources by canonical path.</li>
+<li>Load extensions with non-fatal diagnostics for failures and conflicts.</li>
+<li>Let extensions participate in <code>resources_discover</code> to add skills/prompts/themes.</li>
+<li>Load skills, prompt templates, and themes, deduping by name with first-wins precedence.</li>
+<li>Load context files from global and ancestor project <code>AGENTS.md</code>/<code>CLAUDE.md</code>-style files.</li>
+<li>Load replacement and append system prompt files.</li>
+</ol></div>
+
+<h2>Package/resource precedence</h2>
+<p><code>DefaultPackageManager</code> sorts resources so closer and more explicit sources win:</p>
+<p><span class="tag">project settings</span><span class="tag">project auto</span><span class="tag">user settings</span><span class="tag">user auto</span><span class="tag">packages</span></p>
+<p>Package sources may be npm specs, git URLs/shorthands, or local paths. A package can declare resources in <code>package.json#pi</code> or by convention directories: <code>extensions/</code>, <code>skills/</code>, <code>prompts/</code>, <code>themes/</code>. Filters can include/exclude resources per package.</p>
+
+<h2>Loaded resource types</h2>
+<div class="grid"><div class="card"><h3>Extensions</h3><p>TS/JS factories loaded by <code>jiti</code>. Can register tools, commands, shortcuts, flags, UI, providers, event hooks, and resources. Loaded before most resources so they can alter discovery.</p></div><div class="card"><h3>Skills</h3><p>Markdown <code>SKILL.md</code> files with frontmatter. Injected into the system prompt only when the read tool is active and model invocation is not disabled. May become slash commands when enabled.</p></div><div class="card"><h3>Prompt templates</h3><p>Markdown files invoked as slash commands. Support <code>$1</code>, <code>$@</code>, <code>$ARGUMENTS</code>, and slice substitutions for quoted arguments.</p></div><div class="card"><h3>Themes</h3><p>Built-ins plus JSON themes from user/project/packages. Theme schema validates colors and variables. User custom theme files can hot-reload.</p></div><div class="card"><h3>Context files</h3><p>Global and ancestor project files are loaded into system prompt construction so repository rules and local instructions travel with the session.</p></div><div class="card"><h3>System prompts</h3><p>Replacement <code>SYSTEM.md</code> and append <code>APPEND_SYSTEM.md</code> can come from project/global files or CLI text/path overrides.</p></div></div>
+
+<h2>Reload behavior</h2>
+<p><code>/reload</code> refreshes settings-backed resources, keybindings, extensions, skills, prompt templates, themes, context files, and system prompt fragments. Because sessions and services are cwd-bound, resumed/forked sessions resolve resources relative to that session's cwd.</p>
+
+<h2>Keybindings</h2>
+<p>Keybindings are loaded from global <code>keybindings.json</code> only. The app merges TUI editor keybindings with <code>app.*</code> actions. Extensions can register shortcuts, but critical editor/app bindings are reserved.</p>
+
+<h2>Source landmarks</h2><div class="source-list"><ul><li><code>packages/coding-agent/src/config.ts</code> — path constants and environment variables.</li><li><code>packages/coding-agent/src/core/settings-manager.ts</code> — settings schema, merge, persistence, migration.</li><li><code>packages/coding-agent/src/core/resource-loader.ts</code> — resource orchestration.</li><li><code>packages/coding-agent/src/core/package-manager.ts</code> — package/resource discovery and precedence.</li><li><code>packages/coding-agent/src/core/skills.ts</code> — skill discovery and validation.</li><li><code>packages/coding-agent/src/core/prompt-templates.ts</code> — prompt templates.</li><li><code>packages/coding-agent/src/core/keybindings.ts</code> — app keybindings.</li><li><code>packages/coding-agent/src/modes/interactive/theme/theme.ts</code> — themes.</li></ul></div>
+<div class="nextprev"><a href="tui-integration.html">← TUI integration</a><a href="extension-points.html">Extension points →</a></div>
+</main></div></body></html>

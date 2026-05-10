@@ -1,0 +1,77 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Memory & Tools - Pi Deep Dive</title><link rel="stylesheet" href="styles.css"></head><body><div class="site"><nav><div class="brand">Pi repo<br>deep dive</div><a href="index.html">Start here</a><a href="architecture.html">Architecture</a><a href="agent-loop.html">Agent loop</a><a href="tui-integration.html">TUI integration</a><a href="configuration.html">Configuration</a><a href="extension-points.html">Extension points</a><a href="llm-integration.html">LLM integration</a><a class="active" href="memory-and-tools.html">Memory & tools</a><a href="surfaces.html">Platforms & surfaces</a><a href="change-guide.html">Change guide</a></nav><main>
+<section class="hero"><div class="kicker">Deep integration</div><h1>Memory and tools are session-shaped</h1><p class="lede">Pi does not have a single magic memory database abstraction. Durable memory is primarily append-only session JSONL plus extension-controlled custom entries/messages. Tools are provider-neutral schemas wrapped into agent-executable definitions and rendered by surface-specific renderers.</p></section>
+
+<h2>Memory model: what exists</h2>
+<div class="grid"><div class="card"><h3>In-memory agent state</h3><p><code>Agent.state.messages</code> is the live transcript used by the low-level loop. It changes during streaming and stores finalized messages.</p></div><div class="card"><h3>Durable sessions</h3><p><code>SessionManager</code> persists JSONL entries. Sessions are trees, not flat logs: each entry has an id and parent id.</p></div><div class="card"><h3>Model-visible memory</h3><p>Messages, custom messages, branch summaries, compaction summaries, system prompt content, skills, context files, and context-hook injections can reach the model.</p></div><div class="card"><h3>Private extension state</h3><p><code>custom</code> session entries persist branch-aware extension data but are explicitly ignored by context building unless extension code reads and injects them.</p></div></div>
+
+<h2>Session JSONL entries</h2>
+<p>The session file begins with a header containing type/version/id/timestamp/cwd and optional parent session. Entries are appended as JSON lines. Important entry families:</p>
+<ul>
+<li><code>message</code>: normal user, assistant, or tool-result messages.</li>
+<li><code>model_change</code> and <code>thinking_level_change</code>: restore active runtime settings along a branch.</li>
+<li><code>compaction</code>: stores summary and first-kept entry id; context reconstruction respects compaction boundaries.</li>
+<li><code>branch_summary</code>: generated when navigating branches; can participate in context.</li>
+<li><code>custom</code>: private extension state, not automatically sent to the model.</li>
+<li><code>custom_message</code>: extension-injected durable message that participates in model context.</li>
+<li><code>label</code> and <code>session_info</code>: metadata.</li>
+</ul>
+
+<h2>Branch-correct reconstruction</h2>
+<p><code>buildSessionContext()</code> walks from the current leaf back to the root. It reconstructs messages and the latest model/thinking settings for the selected branch, handles compaction, includes model-visible entries, and skips private <code>custom</code> entries. This is the key rule for adding your own memory system: read the current branch, not the whole session file.</p>
+<div class="callout good"><strong>Memory recipe:</strong> store raw/private memory as versioned <code>custom</code> entries; reconstruct effective state from <code>ctx.sessionManager.getBranch()</code>; inject only selected summaries/facts through <code>custom_message</code>, <code>before_agent_start</code>, <code>context</code>, or system prompt fragments.</div>
+
+<h2>Memory injection points</h2>
+<div class="grid"><div class="card"><h3>System prompt</h3><p><code>buildSystemPrompt()</code> combines custom system prompt, tool snippets/guidelines, project context files, skills, date, cwd, and append prompts. Use this for stable global/project context.</p></div><div class="card"><h3><code>before_agent_start</code></h3><p>Extension hook before the agent starts. Can modify the system prompt for the turn or return custom messages to prepend to the prompt batch.</p></div><div class="card"><h3><code>context</code></h3><p>Runs before every provider call through <code>agent.transformContext</code>. Best for pruning, compacting, retrieving, or injecting memory at the message-list level.</p></div><div class="card"><h3><code>custom_message</code></h3><p>Durable model-visible extension message. Useful for memory summaries that should replay with the branch.</p></div><div class="card"><h3>Tool result details</h3><p>Use <code>details</code> for state naturally tied to a tool call. It persists and branches with that tool result, but is not itself model-visible content.</p></div><div class="card"><h3>Compaction</h3><p>Compaction converts old transcript into a summary and keeps selected later entries. Memory systems should decide whether they inject before or after compaction summaries.</p></div></div>
+
+<h2>Adding your own memory system</h2>
+<div class="flow"><ol>
+<li><strong>Choose private vs model-visible state.</strong> Private facts go to <code>custom</code>. Model-visible summaries go to <code>custom_message</code> or hook injection.</li>
+<li><strong>Version your entries.</strong> Use a stable custom type such as <code>my-memory.v1</code> and data with explicit schema/version.</li>
+<li><strong>Reconstruct from branch.</strong> On <code>session_start</code> and tree/session changes, scan <code>ctx.sessionManager.getBranch()</code> for your entries. Ignore unrelated branches unless you intentionally merge.</li>
+<li><strong>Maintain an in-memory index.</strong> Build whatever vector/BM25/summary cache you need from branch entries or external storage, keyed by session id and branch leaf.</li>
+<li><strong>Inject selectively.</strong> Use <code>context</code> for per-call retrieval or <code>before_agent_start</code> for per-prompt memory. Keep injected text concise and provenance-aware.</li>
+<li><strong>Persist decisions.</strong> When memory changes, append a new <code>custom</code> entry. Do not mutate old JSONL entries.</li>
+<li><strong>Handle compaction.</strong> Decide whether compaction should summarize your memory into <code>custom_message</code>, leave private entries alone, or prune external indexes.</li>
+</ol></div>
+
+<h2>Tool model: from schema to execution</h2>
+<p>At the LLM boundary, a tool is <code>{ name, description, parameters }</code>. Coding-agent extends that with labels, execution, prompt snippets, renderers, argument preparation, and sequential/parallel hints.</p>
+<div class="flow"><ol>
+<li><strong>Definition.</strong> Built-ins and extensions create <code>ToolDefinition</code>s with TypeBox/JSON Schema parameters, descriptions, execution, renderers, and prompt metadata.</li>
+<li><strong>Wrapping.</strong> <code>wrapToolDefinition()</code> adapts definitions into <code>AgentTool</code>s, injecting an extension context into execution.</li>
+<li><strong>Activation.</strong> <code>AgentSession._refreshToolRegistry()</code> merges built-in definitions, extension tools, SDK custom tools, allowlists, and active tool selection.</li>
+<li><strong>Prompt visibility.</strong> <code>buildSystemPrompt()</code> lists selected tool names and prompt snippets/guidelines. Tools are also passed structurally in <code>Context.tools</code>.</li>
+<li><strong>Provider serialization.</strong> Providers map <code>Context.tools</code> to their function/tool schema formats and parse streamed tool calls back into Pi <code>toolCall</code> blocks.</li>
+<li><strong>Validation.</strong> The agent loop finds the tool by name, applies <code>prepareArguments</code>, validates args through <code>validateToolArguments()</code>, and converts failures into error tool results.</li>
+<li><strong>Interception.</strong> <code>beforeToolCall</code>/<code>tool_call</code> can block. <code>afterToolCall</code>/<code>tool_result</code> can patch content/details/error/terminate.</li>
+<li><strong>Execution.</strong> <code>execute(toolCallId, args, signal, onUpdate)</code> returns <code>{ content, details, terminate? }</code>. <code>onUpdate</code> streams partial UI state.</li>
+<li><strong>Result.</strong> The loop creates a <code>ToolResultMessage</code>: <code>content</code> for the model, <code>details</code> for UI/state/export, <code>isError</code> for failure.</li>
+<li><strong>Rendering.</strong> TUI uses <code>ToolExecutionComponent</code> with built-in/extension renderers. HTML export reuses renderers and converts terminal output to HTML. Web UI has a separate Lit renderer registry.</li>
+</ol></div>
+
+<h2>Adding an extension tool</h2>
+<pre><code>pi.registerTool({
+  name: "my_tool",
+  label: "My tool",
+  description: "Short model-facing description.",
+  parameters: Type.Object({ query: Type.String() }),
+  promptSnippet: "my_tool: search the private index",
+  async execute(toolCallId, params, signal, onUpdate, ctx) {
+    onUpdate?.({ content: [{ type: "text", text: "Searching..." }], details: { phase: "search" } });
+    const result = await searchIndex(params.query, signal);
+    return {
+      content: [{ type: "text", text: result.summary }],
+      details: { matches: result.matches }
+    };
+  },
+  renderResult(args, result, context) {
+    return [`Found ${result.details.matches.length} matches`];
+  }
+});</code></pre>
+
+<h2>Adding a built-in tool</h2>
+<div class="flow"><ol><li>Create <code>packages/coding-agent/src/core/tools/&lt;name&gt;.ts</code> with a focused <code>createXToolDefinition(cwd, options)</code>.</li><li>Use TypeBox parameters and return concise, truncation-safe model <code>content</code>.</li><li>Put structured UI/export state in <code>details</code>.</li><li>Add <code>promptSnippet</code> and <code>promptGuidelines</code> if the model needs behavioral guidance.</li><li>Add <code>renderCall</code>/<code>renderResult</code> for TUI display when raw text is not enough.</li><li>Use <code>withFileMutationQueue()</code> for file-mutating tools so edit/write-like operations serialize safely.</li><li>Export from <code>tools/index.ts</code>, extend <code>ToolName</code>, factory switches, and default tool sets if appropriate.</li><li>Add tests for validation, execution, rendering, active-tool registry, and prompt snippets.</li></ol></div>
+
+<h2>Source landmarks</h2><div class="source-list"><ul><li><code>packages/coding-agent/src/core/session-manager.ts</code> — session JSONL and branch context.</li><li><code>packages/coding-agent/src/core/agent-session.ts</code> — persistence, hooks, tool registry, prompt rebuild.</li><li><code>packages/coding-agent/src/core/system-prompt.ts</code> — system/context/skill/tool prompt construction.</li><li><code>packages/coding-agent/src/core/extensions/types.ts</code> — extension memory/tool APIs.</li><li><code>packages/coding-agent/src/core/extensions/runner.ts</code> — context/tool hook emission.</li><li><code>packages/coding-agent/src/core/tools/</code> — built-in tool definitions.</li><li><code>packages/coding-agent/src/core/tools/tool-definition-wrapper.ts</code> — definition-to-agent-tool adapter.</li><li><code>packages/agent/src/agent-loop.ts</code> — tool execution and result messages.</li><li><code>packages/ai/src/types.ts</code> — provider-neutral tool/message schema.</li></ul></div>
+<div class="nextprev"><a href="llm-integration.html">← LLM integration</a><a href="surfaces.html">Platforms & surfaces →</a></div>
+</main></div></body></html>

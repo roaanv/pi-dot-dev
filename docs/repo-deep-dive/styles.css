@@ -1,0 +1,75 @@
+:root {
+  --bg: #f7f1e8;
+  --paper: #fffaf1;
+  --ink: #211b17;
+  --muted: #6f6258;
+  --line: #dfd0bf;
+  --accent: #a3472a;
+  --accent-2: #2f6f73;
+  --code-bg: #241f1b;
+  --code-ink: #f8eadb;
+  --shadow: 0 16px 42px rgba(60, 38, 24, 0.12);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  color: var(--ink);
+  background: radial-gradient(circle at top left, #fbe3cd 0, transparent 34rem), var(--bg);
+  font: 17px/1.6 ui-serif, Georgia, Cambria, "Times New Roman", serif;
+}
+
+a { color: var(--accent); text-decoration-thickness: 0.08em; }
+code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+pre { background: var(--code-bg); color: var(--code-ink); padding: 1rem; border-radius: 16px; overflow: auto; font-size: 0.9rem; }
+code { background: rgba(163, 71, 42, 0.09); padding: 0.12rem 0.28rem; border-radius: 6px; }
+pre code { background: transparent; padding: 0; }
+
+.site { display: grid; grid-template-columns: 18rem minmax(0, 1fr); min-height: 100vh; }
+nav {
+  position: sticky; top: 0; height: 100vh; overflow: auto;
+  padding: 1.4rem; border-right: 1px solid var(--line);
+  background: rgba(255, 250, 241, 0.72); backdrop-filter: blur(18px);
+}
+nav .brand { font: 800 1.2rem/1.1 ui-sans-serif, system-ui, sans-serif; letter-spacing: -0.02em; margin-bottom: 1rem; }
+nav a { display: block; padding: 0.48rem 0.55rem; border-radius: 10px; color: var(--ink); text-decoration: none; font: 600 0.88rem/1.25 ui-sans-serif, system-ui, sans-serif; }
+nav a:hover, nav a.active { background: #f1ddca; color: var(--accent); }
+nav .small { color: var(--muted); font: 0.8rem ui-sans-serif, system-ui, sans-serif; margin-top: 1rem; }
+
+main { max-width: 76rem; padding: 3.5rem clamp(1.2rem, 4vw, 4rem) 5rem; }
+.hero { background: rgba(255, 250, 241, 0.78); border: 1px solid var(--line); border-radius: 28px; padding: clamp(1.4rem, 4vw, 3rem); box-shadow: var(--shadow); margin-bottom: 2rem; }
+h1 { font-size: clamp(2.4rem, 6vw, 5rem); line-height: 0.95; letter-spacing: -0.06em; margin: 0 0 1rem; }
+h2 { font-size: clamp(1.65rem, 3vw, 2.4rem); line-height: 1.1; letter-spacing: -0.035em; margin: 2.5rem 0 1rem; }
+h3 { font: 800 1.05rem/1.2 ui-sans-serif, system-ui, sans-serif; margin: 1.5rem 0 0.45rem; }
+.lede { font-size: 1.25rem; color: var(--muted); max-width: 58rem; }
+.kicker { color: var(--accent); font: 800 0.8rem/1 ui-sans-serif, system-ui, sans-serif; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 0.8rem; }
+
+.grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); }
+.card, .callout, .flow, .source-list { background: rgba(255, 250, 241, 0.82); border: 1px solid var(--line); border-radius: 20px; padding: 1.1rem 1.25rem; box-shadow: 0 8px 24px rgba(60, 38, 24, 0.06); }
+.card h3 { margin-top: 0; }
+.callout { border-left: 6px solid var(--accent); }
+.callout.good { border-left-color: var(--accent-2); }
+.flow ol { margin: 0; padding-left: 1.4rem; }
+.flow li { margin: 0.35rem 0; }
+.tag { display: inline-block; font: 700 0.72rem/1 ui-sans-serif, system-ui, sans-serif; padding: 0.35rem 0.5rem; border-radius: 999px; background: #ead4bf; color: #5b2a1a; margin: 0.15rem; }
+
+.diagram { width: 100%; margin: 1rem 0; background: var(--paper); border: 1px solid var(--line); border-radius: 20px; padding: 1rem; overflow: auto; }
+.diagram svg { min-width: 720px; width: 100%; height: auto; }
+.box { fill: #fffaf1; stroke: #cdbba8; stroke-width: 1.5; }
+.box-accent { fill: #f4d2bd; stroke: #a3472a; stroke-width: 1.5; }
+.box-green { fill: #d9e8df; stroke: #2f6f73; stroke-width: 1.5; }
+.arrow { stroke: #6f6258; stroke-width: 2; fill: none; marker-end: url(#arrowhead); }
+.label { font: 700 13px ui-sans-serif, system-ui, sans-serif; fill: #211b17; }
+.sub { font: 12px ui-sans-serif, system-ui, sans-serif; fill: #6f6258; }
+
+.source-list ul { columns: 2; padding-left: 1.1rem; }
+.nextprev { display: flex; justify-content: space-between; gap: 1rem; margin-top: 3rem; }
+.nextprev a { background: var(--ink); color: var(--paper); border-radius: 12px; padding: 0.7rem 1rem; text-decoration: none; font: 700 0.9rem ui-sans-serif, system-ui, sans-serif; }
+
+@media (max-width: 860px) {
+  .site { display: block; }
+  nav { position: relative; height: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+  nav a { display: inline-block; }
+  main { padding-top: 2rem; }
+  .source-list ul { columns: 1; }
+}

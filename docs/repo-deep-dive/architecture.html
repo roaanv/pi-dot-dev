@@ -1,0 +1,44 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Architecture - Pi Deep Dive</title><link rel="stylesheet" href="styles.css"></head><body><div class="site"><nav><div class="brand">Pi repo<br>deep dive</div><a href="index.html">Start here</a><a class="active" href="architecture.html">Architecture</a><a href="agent-loop.html">Agent loop</a><a href="tui-integration.html">TUI integration</a><a href="configuration.html">Configuration</a><a href="extension-points.html">Extension points</a><a href="llm-integration.html">LLM integration</a><a href="memory-and-tools.html">Memory & tools</a><a href="surfaces.html">Platforms & surfaces</a><a href="change-guide.html">Change guide</a></nav><main>
+<section class="hero"><div class="kicker">System shape</div><h1>Layered, evented, and deliberately seam-heavy</h1><p class="lede">Pi keeps the generic agent loop small and pushes product behavior into <code>AgentSession</code>, resource loaders, and mode-specific surfaces. That is why the same runtime can drive TUI, print/JSON, RPC, SDK, and future platform bridges.</p></section>
+
+<h2>The three runtime layers</h2>
+<p>The diagram below shows the concrete components inside each layer and the main call, configuration, and event relationships between them.</p>
+<div class="diagram" aria-label="Pi runtime layers and component relationships"><img src="runtime-layers-components.svg" alt="Pi runtime layers and component relationships" style="width:100%;min-width:820px;height:auto;display:block;"></div>
+<div class="grid">
+<div class="card"><h3>Foundation: <code>pi-ai</code></h3><p>Defines the provider-neutral language: <code>Model</code>, <code>Context</code>, <code>Message</code>, <code>Tool</code>, stream options, and assistant stream events. Providers register by <code>model.api</code>; product code mostly cares about <code>model.provider</code> for auth and display.</p></div>
+<div class="card"><h3>Loop: <code>pi-agent-core</code></h3><p>Owns the turn machine. It stores messages/tools/model state, calls a supplied stream function, emits lifecycle events, executes tools, supports abort/steer/follow-up, and remains UI-agnostic.</p></div>
+<div class="card"><h3>Product: <code>pi-coding-agent</code></h3><p>Builds the coding agent: config, resources, system prompt, built-in tools, extension runner, sessions, compaction, retry, auth/model registry, slash commands, and run modes.</p></div>
+</div>
+
+<h2>Startup assembly</h2>
+<div class="flow"><ol>
+<li><code>packages/coding-agent/src/main.ts</code> parses CLI args and resolves app mode: interactive for a TTY, print/JSON for non-interactive or explicit flags, RPC for <code>--mode rpc</code>.</li>
+<li>Startup creates cwd-bound services with <code>createAgentSessionServices()</code>: settings manager, resource loader, auth storage, model registry, session manager, extension runner support.</li>
+<li><code>DefaultResourceLoader.reload()</code> loads settings-backed and auto-discovered resources: extensions, skills, prompts, themes, context files, and system prompt files.</li>
+<li><code>createAgentSessionFromServices()</code> creates <code>AgentSession</code>, which creates a low-level <code>Agent</code>, installs hooks, refreshes tools, rebuilds system prompt, and starts session lifecycle.</li>
+<li><code>createAgentSessionRuntime()</code> wraps the current session so modes can replace it on <code>/new</code>, <code>/resume</code>, <code>/fork</code>, or cwd changes without stale services.</li>
+</ol></div>
+
+<h2><code>AgentSession</code> is the product boundary</h2>
+<p>The low-level <code>Agent</code> knows messages, tools, models, stream functions, and events. <code>AgentSession</code> adds everything that makes Pi Pi:</p>
+<div class="grid">
+<div class="card"><h3>Prompt preprocessing</h3><p>Runs extension input hooks, expands prompt templates and skill commands, handles slash/extension commands, blocks or queues input during active streaming, and creates user/custom prompt messages.</p></div>
+<div class="card"><h3>State and persistence</h3><p>Subscribes to agent events, serializes processing, persists completed messages and custom messages to session JSONL, handles model/thinking changes, branch summaries, compaction, and retry.</p></div>
+<div class="card"><h3>Tools and prompt</h3><p>Merges built-in tools, extension tools, and SDK custom tools into active <code>AgentTool</code>s. Rebuilds the system prompt from tool snippets, project context, skills, and configured system prompt fragments.</p></div>
+<div class="card"><h3>Extensions</h3><p>Converts agent events to extension lifecycle events before UI listeners see them, lets hooks alter context/messages/tool calls/results/provider payloads, and exposes session/UI/model APIs to extensions.</p></div>
+</div>
+
+<h2>Runtime replacement</h2>
+<p><code>AgentSessionRuntime</code> is easy to underestimate. It owns the replaceable current session and its cwd-bound services. Interactive mode stores a runtime host and uses getters for <code>session</code>, <code>agent</code>, <code>sessionManager</code>, and <code>settingsManager</code>. That prevents stale references when a user resumes/forks/clones/switches sessions.</p>
+<div class="callout good"><strong>Design rule:</strong> code that lives above <code>AgentSessionRuntime</code> should assume the session can be replaced. Register rebind/invalidate callbacks; do not capture old session objects forever.</div>
+
+<h2>Stable seams vs volatile details</h2>
+<div class="grid">
+<div class="card"><h3>Stable seams</h3><p><code>AgentEvent</code>, <code>AgentSessionEvent</code>, <code>ToolDefinition</code>, <code>ExtensionAPI</code>, <code>SessionEntry</code>, <code>ResourceLoader</code>, <code>ModelRegistry</code>, and SDK factories.</p></div>
+<div class="card"><h3>Volatile details</h3><p>Individual TUI components, provider payload shapes, exact slash-command UI routing, specific built-in theme values, and provider-specific message conversion.</p></div>
+</div>
+
+<h2>Source landmarks</h2>
+<div class="source-list"><ul><li><code>packages/coding-agent/src/main.ts</code> — CLI mode selection and service/session creation.</li><li><code>packages/coding-agent/src/core/sdk.ts</code> — public one-call session factory.</li><li><code>packages/coding-agent/src/core/agent-session-services.ts</code> — cwd-bound services and extension flag validation.</li><li><code>packages/coding-agent/src/core/agent-session-runtime.ts</code> — replaceable session runtime.</li><li><code>packages/coding-agent/src/core/agent-session.ts</code> — product orchestration layer.</li><li><code>packages/agent/src/agent.ts</code> — stateful generic agent wrapper.</li><li><code>packages/agent/src/agent-loop.ts</code> — low-level loop and tool execution.</li></ul></div>
+<div class="nextprev"><a href="index.html">← Start</a><a href="agent-loop.html">Agent loop →</a></div>
+</main></div></body></html>

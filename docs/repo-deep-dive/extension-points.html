@@ -1,0 +1,34 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Extension Points - Pi Deep Dive</title><link rel="stylesheet" href="styles.css"></head><body><div class="site"><nav><div class="brand">Pi repo<br>deep dive</div><a href="index.html">Start here</a><a href="architecture.html">Architecture</a><a href="agent-loop.html">Agent loop</a><a href="tui-integration.html">TUI integration</a><a href="configuration.html">Configuration</a><a class="active" href="extension-points.html">Extension points</a><a href="llm-integration.html">LLM integration</a><a href="memory-and-tools.html">Memory & tools</a><a href="surfaces.html">Platforms & surfaces</a><a href="change-guide.html">Change guide</a></nav><main>
+<section class="hero"><div class="kicker">Customization seams</div><h1>Pi is extension-shaped on purpose</h1><p class="lede">Extensions, SDK options, resources, RPC, custom providers, custom tools, custom messages, prompt templates, skills, themes, and TUI components are all first-class integration points.</p></section>
+
+<h2>Extension loading</h2>
+<p>Extensions are TypeScript/JavaScript factory modules loaded from direct files, extension directories with <code>index.ts/js</code>, or packages declaring <code>pi.extensions</code>. The loader aliases Pi package imports so extensions can import public APIs consistently in source, package, or binary mode.</p>
+<div class="callout"><strong>Load errors are diagnostics, not fatal crashes.</strong> Tool and flag conflicts are reported; first registration generally wins in runtime lookup.</div>
+
+<h2>Extension API registration surface</h2>
+<div class="grid"><div class="card"><h3>Events</h3><p><code>pi.on(event, handler)</code> hooks resource discovery, session lifecycle, context, provider request/response, agent lifecycle, messages, tools, input, model/thinking selection, compaction, tree operations, and session shutdown.</p></div><div class="card"><h3>Tools</h3><p><code>registerTool()</code> adds LLM-callable tools with schema, execution, prompt snippets/guidelines, argument preparation, sequential mode, and TUI renderers.</p></div><div class="card"><h3>Commands</h3><p><code>registerCommand()</code> adds slash commands with descriptions, optional argument completions, and handlers.</p></div><div class="card"><h3>Shortcuts and flags</h3><p><code>registerShortcut()</code> adds key shortcuts. <code>registerFlag()</code> declares CLI flags that are validated after extension load.</p></div><div class="card"><h3>Renderers and messages</h3><p><code>registerMessageRenderer()</code> displays custom message types. <code>sendMessage()</code> injects custom messages into the session/LLM context.</p></div><div class="card"><h3>Providers</h3><p><code>registerProvider()</code> can add OAuth, headers, models, base URLs, auth behavior, or a custom <code>streamSimple</code> implementation.</p></div></div>
+
+<h2>Extension event classes</h2>
+<div class="grid"><div class="card"><h3>Resource/session</h3><p><code>resources_discover</code>, <code>session_start</code>, <code>session_before_switch</code>, <code>session_before_fork</code>, <code>session_before_compact</code>, <code>session_compact</code>, <code>session_shutdown</code>, tree events.</p></div><div class="card"><h3>Agent/model</h3><p><code>context</code>, <code>before_provider_request</code>, <code>after_provider_response</code>, <code>before_agent_start</code>, <code>agent_start/end</code>, <code>turn_start/end</code>, <code>message_start/update/end</code>, model/thinking selection.</p></div><div class="card"><h3>Input/tools</h3><p><code>input</code> can transform/handle user text. <code>tool_call</code> can block execution. <code>tool_result</code> can patch result content/details/error/terminate.</p></div></div>
+
+<h2>UI extension surface</h2>
+<p>Interactive mode supplies a rich <code>ExtensionUIContext</code>: select/confirm/input dialogs, notifications, terminal input listeners, status and working indicators, widgets, custom footer/header/title, editor control, autocomplete wrapping, theme APIs, overlays, and temporary focused components. RPC supplies protocol-backed versions for dialogs and simple status/widgets; print mode cannot host interactive TUI UI.</p>
+
+<h2>Resource extension points</h2>
+<ul>
+<li><strong>Packages:</strong> bundle extensions, skills, prompts, and themes in npm/git/local packages.</li>
+<li><strong>Skills:</strong> add model-invocable markdown capabilities and optional slash commands.</li>
+<li><strong>Prompt templates:</strong> add reusable slash-command prompt expansions.</li>
+<li><strong>Themes:</strong> add JSON color systems.</li>
+<li><strong>Context/system prompt files:</strong> alter global/project prompt context without code.</li>
+</ul>
+
+<h2>SDK extension points</h2>
+<p><code>createAgentSession()</code> accepts custom cwd/agentDir, auth/model/settings/resource/session managers, explicit model/thinking/scoped models, <code>noTools</code>, tool allowlists, custom tools, injected resource loaders, and session start events. <code>DefaultResourceLoaderOptions</code> also accepts inline extension factories, extra paths, disable flags, prompt overrides, and override callbacks for loaded resources.</p>
+
+<h2>Low-level extension points</h2>
+<div class="grid"><div class="card"><h3><code>Agent</code></h3><p>Inject <code>streamFn</code>, <code>convertToLlm</code>, <code>transformContext</code>, <code>getApiKey</code>, <code>beforeToolCall</code>, <code>afterToolCall</code>, queues, transport, retry caps, thinking budgets.</p></div><div class="card"><h3><code>pi-ai</code></h3><p>Register or unregister API providers, image providers, OAuth providers, and custom model catalogs. Dispatch remains keyed by <code>model.api</code>.</p></div><div class="card"><h3><code>TUI</code></h3><p>Build custom components that implement <code>render(width)</code> and optional <code>handleInput()</code>; use overlays, focus, keybindings, and cursor markers.</p></div></div>
+
+<h2>Source landmarks</h2><div class="source-list"><ul><li><code>packages/coding-agent/src/core/extensions/types.ts</code> — extension API and event contracts.</li><li><code>packages/coding-agent/src/core/extensions/loader.ts</code> — discovery/loading/runtime creation.</li><li><code>packages/coding-agent/src/core/extensions/runner.ts</code> — hook emission and context creation.</li><li><code>packages/coding-agent/examples/extensions/</code> — working examples.</li><li><code>packages/coding-agent/docs/extensions.md</code> — public extension guide.</li><li><code>packages/coding-agent/src/index.ts</code> — public exports.</li></ul></div>
+<div class="nextprev"><a href="configuration.html">← Configuration</a><a href="llm-integration.html">LLM integration →</a></div>
+</main></div></body></html>

@@ -1,0 +1,46 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TUI Integration - Pi Deep Dive</title><link rel="stylesheet" href="styles.css"></head><body><div class="site"><nav><div class="brand">Pi repo<br>deep dive</div><a href="index.html">Start here</a><a href="architecture.html">Architecture</a><a href="agent-loop.html">Agent loop</a><a class="active" href="tui-integration.html">TUI integration</a><a href="configuration.html">Configuration</a><a href="extension-points.html">Extension points</a><a href="llm-integration.html">LLM integration</a><a href="memory-and-tools.html">Memory & tools</a><a href="surfaces.html">Platforms & surfaces</a><a href="change-guide.html">Change guide</a></nav><main>
+<section class="hero"><div class="kicker">Terminal surface</div><h1>TUI is a consumer of session events</h1><p class="lede"><code>InteractiveMode</code> does not run the agent loop directly. It owns terminal input and rendering, delegates work to <code>AgentSession</code>, and maps <code>AgentSessionEvent</code>s into TUI components.</p></section>
+
+<h2>Input-to-render flow</h2>
+<div class="diagram" aria-label="TUI to agent flow"><svg viewBox="0 0 1000 320"><defs><marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#6f6258"/></marker></defs>
+<rect class="box" x="30" y="40" width="150" height="64" rx="12"/><text class="label" x="105" y="75" text-anchor="middle">Terminal</text><text class="sub" x="105" y="94" text-anchor="middle">raw stdin</text>
+<rect class="box" x="230" y="40" width="150" height="64" rx="12"/><text class="label" x="305" y="75" text-anchor="middle">TUI</text><text class="sub" x="305" y="94" text-anchor="middle">focus + input</text>
+<rect class="box-accent" x="430" y="40" width="170" height="64" rx="12"/><text class="label" x="515" y="75" text-anchor="middle">CustomEditor</text><text class="sub" x="515" y="94" text-anchor="middle">submit router</text>
+<rect class="box-accent" x="650" y="40" width="170" height="64" rx="12"/><text class="label" x="735" y="75" text-anchor="middle">AgentSession</text><text class="sub" x="735" y="94" text-anchor="middle">prompt + events</text>
+<rect class="box-green" x="430" y="190" width="170" height="64" rx="12"/><text class="label" x="515" y="225" text-anchor="middle">Components</text><text class="sub" x="515" y="244" text-anchor="middle">chat/status/footer</text>
+<rect class="box" x="230" y="190" width="150" height="64" rx="12"/><text class="label" x="305" y="225" text-anchor="middle">Renderer</text><text class="sub" x="305" y="244" text-anchor="middle">diff frame</text>
+<path class="arrow" d="M180 72 H230"/><path class="arrow" d="M380 72 H430"/><path class="arrow" d="M600 72 H650"/><path class="arrow" d="M735 104 C735 170 610 190 600 215"/><path class="arrow" d="M430 222 H380"/></svg></div>
+
+<h2>Interactive mode lifecycle</h2>
+<div class="flow"><ol>
+<li><code>main.ts</code> selects interactive mode and creates <code>AgentSessionRuntime</code>.</li>
+<li><code>new InteractiveMode(runtime)</code> creates a <code>TUI(new ProcessTerminal())</code>, root containers, editor, footer, and theme state.</li>
+<li><code>init()</code> adds header, chat, pending message, status, extension widget, editor, and footer containers in visual order.</li>
+<li>The UI starts raw terminal input, focuses the editor, loads keybindings, binds extensions, and subscribes to the current session.</li>
+<li><code>run()</code> loops forever: wait for <code>getUserInput()</code>, then call <code>session.prompt(input)</code>.</li>
+<li>When sessions are replaced, runtime callbacks let the UI invalidate extension UI, unsubscribe old listeners, bind the new session, and rerender existing context.</li>
+</ol></div>
+
+<h2>Terminal and TUI package</h2>
+<p><code>packages/tui</code> is a generic line-oriented terminal renderer. <code>ProcessTerminal</code> enables raw mode, bracketed paste, resize handling, keyboard protocol negotiation, and forwards normalized key sequences. <code>TUI.handleInput()</code> runs global input listeners, handles terminal responses, manages overlays/focus, forwards input to the focused component, and requests a render.</p>
+<div class="callout"><strong>Rendering constraint:</strong> every component line must fit inside the width passed to <code>render(width)</code>, except special image lines. Custom TUI components must invalidate themselves and request a render after state changes.</div>
+
+<h2>Editor submit routing</h2>
+<p><code>CustomEditor</code> wraps the base TUI editor with app-level shortcuts. On submit, <code>InteractiveMode.setupEditorSubmitHandler()</code> routes input:</p>
+<ul>
+<li>Built-in slash commands such as <code>/settings</code>, <code>/model</code>, <code>/export</code>, <code>/session</code>, <code>/compact</code>, <code>/reload</code>, <code>/login</code>, <code>/resume</code>, and <code>/quit</code> are handled in the UI layer.</li>
+<li>Extension commands are delegated through the extension runner.</li>
+<li><code>!</code> / <code>!!</code> run bash through the session bash execution path.</li>
+<li>During streaming, normal text becomes <code>session.prompt(text, { streamingBehavior: "steer" })</code> and pending UI is updated.</li>
+<li>When idle, normal chat text resolves the pending <code>getUserInput()</code> promise; the main run loop then calls <code>session.prompt()</code>.</li>
+</ul>
+
+<h2>Session events to components</h2>
+<div class="grid"><div class="card"><h3>Assistant streaming</h3><p><code>message_start</code> creates an <code>AssistantMessageComponent</code>. <code>message_update</code> mutates it with text/thinking/tool-call deltas. <code>message_end</code> finalizes aborted/error state and clears streaming references.</p></div><div class="card"><h3>Tool status</h3><p>Assistant tool-call content creates pending <code>ToolExecutionComponent</code>s. <code>tool_execution_start/update/end</code> marks args, execution state, partial output, final result, and image conversion.</p></div><div class="card"><h3>Queues and lifecycle</h3><p><code>queue_update</code> refreshes pending steer/follow-up display. <code>agent_start</code> starts loaders/progress. <code>agent_end</code> clears progress, orphan pending tools, and shutdown state.</p></div></div>
+
+<h2>Extension UI in interactive mode</h2>
+<p>Interactive mode supplies the real <code>ExtensionUIContext</code>: dialogs, confirmations, input prompts, notifications, terminal input listeners, status text, working indicators, widgets above/below editor, custom footer/header/title, editor control, autocomplete wrapping, overlays, and focused custom components. RPC and print cannot provide all of these; see <a href="surfaces.html">surfaces</a>.</p>
+
+<h2>Source landmarks</h2><div class="source-list"><ul><li><code>packages/coding-agent/src/modes/interactive/interactive-mode.ts</code> — integration layer.</li><li><code>packages/coding-agent/src/modes/interactive/components/custom-editor.ts</code> — app-level editor wrapper.</li><li><code>packages/coding-agent/src/modes/interactive/components/assistant-message.ts</code> — assistant renderer.</li><li><code>packages/coding-agent/src/modes/interactive/components/tool-execution.ts</code> — tool renderer.</li><li><code>packages/tui/src/tui.ts</code> — component/focus/rendering engine.</li><li><code>packages/tui/src/terminal.ts</code> — terminal adapter.</li><li><code>packages/tui/src/components/editor.ts</code> — text editing and submit semantics.</li></ul></div>
+<div class="nextprev"><a href="agent-loop.html">← Agent loop</a><a href="configuration.html">Configuration →</a></div>
+</main></div></body></html>

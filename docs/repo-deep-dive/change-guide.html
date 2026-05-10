@@ -1,0 +1,28 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Change Guide - Pi Deep Dive</title><link rel="stylesheet" href="styles.css"></head><body><div class="site"><nav><div class="brand">Pi repo<br>deep dive</div><a href="index.html">Start here</a><a href="architecture.html">Architecture</a><a href="agent-loop.html">Agent loop</a><a href="tui-integration.html">TUI integration</a><a href="configuration.html">Configuration</a><a href="extension-points.html">Extension points</a><a href="llm-integration.html">LLM integration</a><a href="memory-and-tools.html">Memory & tools</a><a href="surfaces.html">Platforms & surfaces</a><a class="active" href="change-guide.html">Change guide</a></nav><main>
+<section class="hero"><div class="kicker">Where to change what</div><h1>Decision map for future work</h1><p class="lede">Use the smallest seam that matches the change. Most product features belong in <code>packages/coding-agent</code>; only generic loop semantics belong in <code>packages/agent</code>; only provider abstraction belongs in <code>packages/ai</code>.</p></section>
+
+<h2>Common tasks</h2>
+<div class="grid">
+<div class="card"><h3>Add a built-in coding tool</h3><p>Start in <code>packages/coding-agent/src/core/tools/</code>. Add a definition, export it in <code>tools/index.ts</code>, update default sets if needed, and ensure prompt snippets/renderers/tests exist.</p></div>
+<div class="card"><h3>Add an extension tool</h3><p>Use <code>pi.registerTool()</code> in an extension. This avoids touching core and gets schema validation, execution, hooks, and rendering integration.</p></div>
+<div class="card"><h3>Add memory behavior</h3><p>Prefer an extension using <code>custom</code> entries plus <code>context</code> or <code>before_agent_start</code>. Touch <code>SessionManager</code> only if changing the session format itself.</p></div>
+<div class="card"><h3>Add a slash command</h3><p>For core TUI commands, update <code>slash-commands.ts</code> and interactive submit routing. For reusable/project commands, prefer prompt templates, skills, or extension commands.</p></div>
+<div class="card"><h3>Add a provider</h3><p>For built-ins, update <code>packages/ai</code> provider registration/model generation and coding-agent model/auth docs. For local/custom providers, prefer <code>models.json</code> or extension <code>registerProvider()</code>.</p></div>
+<div class="card"><h3>Add platform integration</h3><p>Do not wire Telegram/Discord into the TUI. Build a bridge on SDK or RPC. Map external conversation ids to Pi sessions and translate events.</p></div>
+<div class="card"><h3>Change TUI rendering</h3><p>Most UI changes are in <code>interactive-mode.ts</code> or <code>modes/interactive/components/</code>. Generic renderer/focus/overlay behavior belongs in <code>packages/tui</code>.</p></div>
+<div class="card"><h3>Change config/resource loading</h3><p>Use <code>settings-manager.ts</code> for settings schema/merge, <code>resource-loader.ts</code> for load order, and <code>package-manager.ts</code> for package discovery/precedence.</p></div>
+</div>
+
+<h2>Do not cross these wires</h2>
+<ul>
+<li>Do not put provider-specific request logic in <code>packages/agent</code>. The loop must stay provider-neutral.</li>
+<li>Do not put terminal-specific UI assumptions into <code>AgentSession</code>. Modes should consume session events.</li>
+<li>Do not assume sessions are flat logs. They are branch trees.</li>
+<li>Do not make private extension state model-visible accidentally. <code>custom</code> is private; <code>custom_message</code> is model-visible.</li>
+<li>Do not bypass resource precedence unless a CLI override explicitly requires it.</li>
+</ul>
+
+<h2>Useful source trails</h2>
+<div class="source-list"><ul><li>Agent loop: <code>packages/agent/src/agent-loop.ts</code>, <code>packages/agent/src/types.ts</code></li><li>Session/product layer: <code>packages/coding-agent/src/core/agent-session.ts</code></li><li>Sessions/memory: <code>packages/coding-agent/src/core/session-manager.ts</code></li><li>Tools: <code>packages/coding-agent/src/core/tools/</code></li><li>Extensions: <code>packages/coding-agent/src/core/extensions/</code></li><li>Config/resources: <code>settings-manager.ts</code>, <code>resource-loader.ts</code>, <code>package-manager.ts</code></li><li>TUI: <code>packages/coding-agent/src/modes/interactive/</code>, <code>packages/tui/src/</code></li><li>LLMs/providers: <code>packages/ai/src/stream.ts</code>, <code>api-registry.ts</code>, <code>providers/register-builtins.ts</code>, <code>coding-agent/src/core/model-registry.ts</code></li><li>Surfaces: <code>modes/print-mode.ts</code>, <code>modes/rpc/</code>, <code>core/sdk.ts</code>, <code>packages/web-ui/</code></li></ul></div>
+<div class="nextprev"><a href="surfaces.html">← Platforms & surfaces</a><span></span></div>
+</main></div></body></html>

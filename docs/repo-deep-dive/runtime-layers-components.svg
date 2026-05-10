@@ -1,0 +1,189 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1320 980" role="img" aria-labelledby="title desc">
+  <title id="title">Pi runtime layers and component relationships</title>
+  <desc id="desc">A layered architecture diagram showing coding-agent components above agent-core components above pi-ai components, with relationships between AgentSessionRuntime, AgentSession, Agent, runAgentLoop, streamSimple, API Registry, and Provider.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,3.5 L0,7 Z" fill="#5f554c" />
+    </marker>
+    <marker id="arrowAccent" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,3.5 L0,7 Z" fill="#a3472a" />
+    </marker>
+    <marker id="arrowGreen" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,3.5 L0,7 Z" fill="#2f6f73" />
+    </marker>
+    <filter id="shadow" x="-10%" y="-20%" width="120%" height="150%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#3c2618" flood-opacity="0.14"/>
+    </filter>
+    <style>
+      .bg { fill: #f7f1e8; }
+      .layer { fill: rgba(255,250,241,0.9); stroke: #d8c5b1; stroke-width: 2; filter: url(#shadow); }
+      .layer-title { font: 800 24px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif; fill: #211b17; }
+      .layer-sub { font: 14px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif; fill: #6f6258; }
+      .component { fill: #fffaf1; stroke: #cdbba8; stroke-width: 2; }
+      .component-accent { fill: #f4d2bd; stroke: #a3472a; stroke-width: 2; }
+      .component-green { fill: #d9e8df; stroke: #2f6f73; stroke-width: 2; }
+      .component-blue { fill: #dfe8ef; stroke: #426579; stroke-width: 2; }
+      .label { font: 800 17px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif; fill: #211b17; }
+      .small { font: 13px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif; fill: #6f6258; }
+      .tiny { font: 12px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif; fill: #6f6258; }
+      .arrow { fill: none; stroke: #5f554c; stroke-width: 2.5; marker-end: url(#arrow); }
+      .arrow-accent { fill: none; stroke: #a3472a; stroke-width: 2.7; marker-end: url(#arrowAccent); }
+      .arrow-green { fill: none; stroke: #2f6f73; stroke-width: 2.7; marker-end: url(#arrowGreen); }
+      .arrow-dash { fill: none; stroke: #5f554c; stroke-width: 2.3; stroke-dasharray: 8 7; marker-end: url(#arrow); }
+      .note { fill: #fff7e8; stroke: #e0c8ad; stroke-width: 1.5; }
+      .legend { font: 13px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif; fill: #211b17; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1320" height="980" />
+
+  <text x="60" y="58" class="layer-title">Pi runtime layers and component relationships</text>
+  <text x="60" y="84" class="layer-sub">Surfaces call into coding-agent, coding-agent configures agent-core, agent-core calls pi-ai, and events/results flow back up.</text>
+
+  <!-- External surfaces -->
+  <rect x="60" y="118" width="250" height="94" rx="20" class="component-blue" />
+  <text x="185" y="153" text-anchor="middle" class="label">Surfaces</text>
+  <text x="185" y="177" text-anchor="middle" class="small">TUI / SDK / RPC / print</text>
+  <text x="185" y="197" text-anchor="middle" class="tiny">humans, scripts, platform bridges</text>
+
+  <!-- coding-agent layer -->
+  <rect x="60" y="250" width="1200" height="255" rx="28" class="layer" />
+  <text x="90" y="288" class="layer-title">packages/coding-agent</text>
+  <text x="90" y="313" class="layer-sub">Product runtime: sessions, resources, extensions, auth/models, built-in tools, and mode-facing events.</text>
+
+  <rect x="95" y="350" width="190" height="88" rx="16" class="component-accent" />
+  <text x="190" y="383" text-anchor="middle" class="label">InteractiveMode</text>
+  <text x="190" y="407" text-anchor="middle" class="small">renders events</text>
+  <text x="190" y="426" text-anchor="middle" class="tiny">handles editor/input</text>
+
+  <rect x="335" y="340" width="210" height="108" rx="16" class="component-accent" />
+  <text x="440" y="377" text-anchor="middle" class="label">AgentSessionRuntime</text>
+  <text x="440" y="402" text-anchor="middle" class="small">current session host</text>
+  <text x="440" y="422" text-anchor="middle" class="tiny">new / resume / fork / reload</text>
+
+  <rect x="610" y="330" width="210" height="128" rx="16" class="component-accent" />
+  <text x="715" y="366" text-anchor="middle" class="label">AgentSession</text>
+  <text x="715" y="391" text-anchor="middle" class="small">product boundary</text>
+  <text x="715" y="412" text-anchor="middle" class="tiny">prompt preprocessing</text>
+  <text x="715" y="431" text-anchor="middle" class="tiny">persistence + hooks</text>
+
+  <rect x="890" y="318" width="150" height="70" rx="14" class="component" />
+  <text x="965" y="348" text-anchor="middle" class="label">ResourceLoader</text>
+  <text x="965" y="371" text-anchor="middle" class="tiny">skills/templates/themes</text>
+
+  <rect x="1080" y="318" width="145" height="70" rx="14" class="component" />
+  <text x="1152" y="348" text-anchor="middle" class="label">ExtensionRunner</text>
+  <text x="1152" y="371" text-anchor="middle" class="tiny">events + APIs</text>
+
+  <rect x="890" y="410" width="150" height="70" rx="14" class="component" />
+  <text x="965" y="440" text-anchor="middle" class="label">ModelRegistry</text>
+  <text x="965" y="463" text-anchor="middle" class="tiny">models/auth/headers</text>
+
+  <rect x="1080" y="410" width="145" height="70" rx="14" class="component" />
+  <text x="1152" y="440" text-anchor="middle" class="label">SessionManager</text>
+  <text x="1152" y="463" text-anchor="middle" class="tiny">JSONL branch tree</text>
+
+  <!-- agent-core layer -->
+  <rect x="60" y="550" width="1200" height="190" rx="28" class="layer" />
+  <text x="90" y="588" class="layer-title">packages/agent · pi-agent-core</text>
+  <text x="90" y="613" class="layer-sub">Provider-neutral loop: transcript state, lifecycle events, queues, and tool execution.</text>
+
+  <rect x="345" y="640" width="190" height="72" rx="16" class="component-green" />
+  <text x="440" y="672" text-anchor="middle" class="label">Agent</text>
+  <text x="440" y="696" text-anchor="middle" class="small">state + subscribers</text>
+
+  <rect x="620" y="630" width="190" height="92" rx="16" class="component-green" />
+  <text x="715" y="664" text-anchor="middle" class="label">runAgentLoop</text>
+  <text x="715" y="688" text-anchor="middle" class="small">turn machine</text>
+  <text x="715" y="707" text-anchor="middle" class="tiny">stream + tools + queues</text>
+
+  <rect x="885" y="630" width="165" height="92" rx="16" class="component" />
+  <text x="967" y="663" text-anchor="middle" class="label">AgentTool</text>
+  <text x="967" y="687" text-anchor="middle" class="small">execute + schema</text>
+  <text x="967" y="706" text-anchor="middle" class="tiny">content/details result</text>
+
+  <rect x="1080" y="640" width="145" height="72" rx="16" class="component" />
+  <text x="1152" y="672" text-anchor="middle" class="label">AgentEvent</text>
+  <text x="1152" y="696" text-anchor="middle" class="small">message/tool lifecycle</text>
+
+  <!-- pi-ai layer -->
+  <rect x="60" y="785" width="1200" height="145" rx="28" class="layer" />
+  <text x="90" y="823" class="layer-title">packages/ai · pi-ai</text>
+  <text x="90" y="848" class="layer-sub">LLM integration boundary: model/context/tool types, stream protocol, API registry, and providers.</text>
+
+  <rect x="355" y="865" width="170" height="52" rx="14" class="component" />
+  <text x="440" y="897" text-anchor="middle" class="label">Model / Context / Tool</text>
+
+  <rect x="625" y="865" width="180" height="52" rx="14" class="component" />
+  <text x="715" y="897" text-anchor="middle" class="label">streamSimple</text>
+
+  <rect x="885" y="865" width="165" height="52" rx="14" class="component" />
+  <text x="967" y="897" text-anchor="middle" class="label">API Registry</text>
+
+  <rect x="1080" y="865" width="145" height="52" rx="14" class="component" />
+  <text x="1152" y="897" text-anchor="middle" class="label">Provider</text>
+
+  <!-- main call path -->
+  <path class="arrow-accent" d="M310 165 C350 165 360 260 400 340" />
+  <text x="326" y="226" class="tiny">create/run mode</text>
+
+  <path class="arrow-accent" d="M285 394 H335" />
+  <text x="292" y="382" class="tiny">prompt/events</text>
+
+  <path class="arrow-accent" d="M545 394 H610" />
+  <text x="558" y="382" class="tiny">owns current</text>
+
+  <path class="arrow-green" d="M715 458 C715 545 520 550 468 640" />
+  <text x="530" y="540" class="tiny">creates/configures</text>
+
+  <path class="arrow-green" d="M535 676 H620" />
+  <text x="552" y="664" class="tiny">prompt()</text>
+
+  <path class="arrow" d="M715 722 V865" />
+  <text x="730" y="788" class="tiny">LLM call boundary</text>
+
+  <path class="arrow" d="M805 891 H885" />
+  <text x="819" y="879" class="tiny">dispatch by model.api</text>
+
+  <path class="arrow" d="M1050 891 H1080" />
+
+  <!-- supporting relationships -->
+  <path class="arrow-dash" d="M890 353 H820" />
+  <text x="832" y="341" class="tiny">system prompt/resources</text>
+
+  <path class="arrow-dash" d="M1080 353 C980 353 940 330 820 365" />
+  <text x="1000" y="304" class="tiny">hooks/tools/UI/providers</text>
+
+  <path class="arrow-dash" d="M965 410 C935 370 870 375 820 394" />
+  <text x="872" y="404" class="tiny">model + auth</text>
+
+  <path class="arrow-dash" d="M1080 445 H820" />
+  <text x="850" y="466" class="tiny">persist/rebuild context</text>
+
+  <path class="arrow-dash" d="M890 676 H810" />
+  <text x="828" y="664" class="tiny">active tools</text>
+
+  <path class="arrow-dash" d="M965 480 C960 580 960 610 965 630" />
+  <text x="980" y="560" class="tiny">headers/api key</text>
+
+  <path class="arrow-dash" d="M440 712 V865" />
+  <text x="300" y="793" class="tiny">typed model/context/tool abstractions</text>
+
+  <!-- return path -->
+  <path class="arrow-accent" d="M1080 676 C990 620 845 592 785 458" />
+  <text x="930" y="602" class="tiny">events bubble up</text>
+
+  <path class="arrow-accent" d="M610 426 C510 488 315 488 220 438" />
+  <text x="330" y="486" class="tiny">AgentSessionEvent → UI/RPC/SDK</text>
+
+  <!-- legend -->
+  <rect x="60" y="936" width="1200" height="28" rx="10" class="note" />
+  <line x1="92" y1="950" x2="132" y2="950" class="arrow-accent" />
+  <text x="145" y="955" class="legend">product/session flow</text>
+  <line x1="320" y1="950" x2="360" y2="950" class="arrow-green" />
+  <text x="373" y="955" class="legend">agent-core call flow</text>
+  <line x1="535" y1="950" x2="575" y2="950" class="arrow" />
+  <text x="588" y="955" class="legend">LLM/provider dispatch</text>
+  <line x1="760" y1="950" x2="800" y2="950" class="arrow-dash" />
+  <text x="813" y="955" class="legend">supporting dependency/configuration</text>
+</svg>

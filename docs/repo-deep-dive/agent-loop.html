@@ -1,0 +1,52 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Agent Loop - Pi Deep Dive</title><link rel="stylesheet" href="styles.css"></head><body><div class="site"><nav><div class="brand">Pi repo<br>deep dive</div><a href="index.html">Start here</a><a href="architecture.html">Architecture</a><a class="active" href="agent-loop.html">Agent loop</a><a href="tui-integration.html">TUI integration</a><a href="configuration.html">Configuration</a><a href="extension-points.html">Extension points</a><a href="llm-integration.html">LLM integration</a><a href="memory-and-tools.html">Memory & tools</a><a href="surfaces.html">Platforms & surfaces</a><a href="change-guide.html">Change guide</a></nav><main>
+<section class="hero"><div class="kicker">Turn machine</div><h1>Every step in the agent loop</h1><p class="lede">The loop lives in <code>packages/agent/src/agent-loop.ts</code>. It receives product-prepared messages and tools, speaks to an injected stream function, emits lifecycle events, executes tool calls, and decides whether to continue.</p></section>
+
+<h2>Loop entrypoints</h2>
+<div class="grid"><div class="card"><h3><code>agentLoop(prompts, context, config)</code></h3><p>Adds new prompt messages to the current context, emits start/message events for them, then enters the shared loop.</p></div><div class="card"><h3><code>agentLoopContinue(context, config)</code></h3><p>Continues from existing context after tool results or retries. It refuses empty context and refuses to continue from an assistant message.</p></div><div class="card"><h3><code>Agent.prompt()</code></h3><p>The stateful wrapper rejects concurrent runs, creates an abort controller, marks streaming state, creates loop config, and awaits subscribers for each event.</p></div></div>
+
+<h2>Full turn flow</h2>
+<p>This matrix aligns with the numbered flow below: each row is one loop step, with the emitted events, the injection/customization seams, and a plain-English explanation of what each seam actually is.</p>
+<div class="diagram" aria-label="Pi agent loop matrix reference"><img src="agent-loop-timeline.svg" alt="Pi agent loop matrix reference showing numbered steps, emitted events, injection points, and hook explanations" style="width:100%;min-width:1120px;height:auto;display:block;"></div>
+<div class="flow"><ol>
+<li><strong>Start run.</strong> Emit <code>agent_start</code>. For a new prompt, emit <code>turn_start</code>, <code>message_start</code>, and <code>message_end</code> for each user/custom prompt message.</li>
+<li><strong>Drain initial steering.</strong> <code>getSteeringMessages()</code> may supply messages typed while the agent was busy.</li>
+<li><strong>Begin a turn.</strong> Emit <code>turn_start</code> except for the very first turn already opened by prompt handling.</li>
+<li><strong>Inject pending messages.</strong> Steering/follow-up messages are appended to context and emitted as normal message start/end events before the next assistant call.</li>
+<li><strong>Transform context.</strong> Optional <code>transformContext(AgentMessage[])</code> can prune, compact, or inject messages at the agent-message level.</li>
+<li><strong>Convert to LLM messages.</strong> Required <code>convertToLlm()</code> filters or maps custom app messages into provider-compatible <code>Message[]</code>.</li>
+<li><strong>Build LLM context.</strong> The loop constructs <code>{ systemPrompt, messages, tools }</code>.</li>
+<li><strong>Resolve dynamic auth.</strong> If <code>getApiKey(provider)</code> exists, it is called for each LLM request. Coding-agent usually does richer auth in its custom <code>streamFn</code>.</li>
+<li><strong>Call stream function.</strong> <code>streamFn(model, context, options)</code> returns an assistant event stream from <code>pi-ai</code> or an injected implementation.</li>
+<li><strong>Stream assistant partials.</strong> On provider <code>start</code>, append a partial assistant message and emit <code>message_start</code>. Text, thinking, and tool-call deltas update the partial and emit <code>message_update</code>.</li>
+<li><strong>Finalize assistant.</strong> On provider <code>done</code> or <code>error</code>, replace the partial with the final assistant message and emit <code>message_end</code>.</li>
+<li><strong>Stop on error/abort.</strong> If the assistant stop reason is <code>error</code> or <code>aborted</code>, emit <code>turn_end</code> with no tool results, then <code>agent_end</code>.</li>
+<li><strong>Collect tool calls.</strong> The final assistant content is scanned for <code>toolCall</code> blocks.</li>
+<li><strong>Execute tools.</strong> Tool calls run in parallel by default, unless config says sequential or any selected tool has <code>executionMode: "sequential"</code>.</li>
+<li><strong>Prepare each tool.</strong> Find the matching tool, apply <code>prepareArguments</code>, validate arguments against schema, and run <code>beforeToolCall</code>. Missing/invalid/blocked tools become error results.</li>
+<li><strong>Run tool body.</strong> Call <code>tool.execute(toolCallId, args, signal, onUpdate)</code>. <code>onUpdate</code> emits <code>tool_execution_update</code>.</li>
+<li><strong>Finalize tool result.</strong> Run <code>afterToolCall</code> and emit <code>tool_execution_end</code>. Convert output into a <code>toolResult</code> message and emit its message start/end events.</li>
+<li><strong>Append tool results.</strong> Tool result messages are appended to context and returned new-message list in assistant source order.</li>
+<li><strong>End turn.</strong> Emit <code>turn_end</code> with the assistant message and tool results.</li>
+<li><strong>Check stop hook.</strong> <code>shouldStopAfterTurn()</code> can gracefully end after the completed turn.</li>
+<li><strong>Check more work.</strong> If tool calls produced results and did not all terminate, loop into another assistant turn. Otherwise poll steering, then follow-up messages.</li>
+<li><strong>End run.</strong> If no tools, steering, or follow-ups remain, emit <code>agent_end</code> with the new messages.</li>
+</ol></div>
+
+<h2>Events emitted by the loop</h2>
+<div class="grid"><div class="card"><h3>Run and turn</h3><p><code>agent_start</code>, <code>agent_end</code>, <code>turn_start</code>, <code>turn_end</code>.</p></div><div class="card"><h3>Messages</h3><p><code>message_start</code>, <code>message_update</code>, <code>message_end</code>. Assistant partials mutate during streaming; final messages replace the partial.</p></div><div class="card"><h3>Tools</h3><p><code>tool_execution_start</code>, <code>tool_execution_update</code>, <code>tool_execution_end</code>, plus normal <code>toolResult</code> message events.</p></div></div>
+
+<h2>Tool execution details</h2>
+<div class="callout"><strong>Two channels exist:</strong> tool execution events are for UI/status; tool-result messages are for transcript and LLM replay. A tool's <code>details</code> field is for UI/state, while <code>content</code> is what the model sees.</div>
+<p>Parallel execution prepares tool calls in assistant order, then runs allowed calls concurrently. Completion events can arrive in completion order, but persisted tool-result messages are emitted afterward in the assistant's original tool-call order. Sequential mode runs prepare/execute/finalize/message for each call before the next.</p>
+
+<h2>Where coding-agent hooks in</h2>
+<ul>
+<li><code>AgentSession</code> supplies <code>transformContext</code> through extension context hooks.</li>
+<li><code>packages/coding-agent/src/core/messages.ts</code> supplies <code>convertToLlm</code> for custom message types such as bash executions and branch/compaction summaries.</li>
+<li><code>AgentSession</code> maps low-level tool hooks to extension <code>tool_call</code> and <code>tool_result</code> events.</li>
+<li>The SDK supplies a custom <code>streamFn</code> that resolves auth/headers through <code>ModelRegistry</code> before calling <code>pi-ai streamSimple</code>.</li>
+</ul>
+
+<h2>Source landmarks</h2><div class="source-list"><ul><li><code>packages/agent/src/agent-loop.ts</code> — low-level loop and tool execution.</li><li><code>packages/agent/src/agent.ts</code> — stateful wrapper, queues, lifecycle, subscribers.</li><li><code>packages/agent/src/types.ts</code> — loop config, events, tool contracts.</li><li><code>packages/coding-agent/src/core/agent-session.ts</code> — product hooks around the loop.</li><li><code>packages/coding-agent/src/core/messages.ts</code> — custom message conversion.</li></ul></div>
+<div class="nextprev"><a href="architecture.html">← Architecture</a><a href="tui-integration.html">TUI integration →</a></div>
+</main></div></body></html>

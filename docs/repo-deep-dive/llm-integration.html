@@ -1,0 +1,56 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LLM Integration - Pi Deep Dive</title><link rel="stylesheet" href="styles.css"></head><body><div class="site"><nav><div class="brand">Pi repo<br>deep dive</div><a href="index.html">Start here</a><a href="architecture.html">Architecture</a><a href="agent-loop.html">Agent loop</a><a href="tui-integration.html">TUI integration</a><a href="configuration.html">Configuration</a><a href="extension-points.html">Extension points</a><a class="active" href="llm-integration.html">LLM integration</a><a href="memory-and-tools.html">Memory & tools</a><a href="surfaces.html">Platforms & surfaces</a><a href="change-guide.html">Change guide</a></nav><main>
+<section class="hero"><div class="kicker">Provider boundary</div><h1>The agent integrates with LLMs through a stream function</h1><p class="lede">The agent loop does not know OpenAI, Anthropic, Google, or Bedrock internals. It knows <code>Model</code>, <code>Context</code>, tools, options, and the assistant event stream contract.</p></section>
+
+<h2>Request path</h2>
+<pre><code>User/session message
+  -> AgentSession
+  -> Agent.prompt()
+  -> runAgentLoop()
+  -> transformContext + convertToLlm
+  -> streamFn(model, Context, SimpleStreamOptions)
+  -> ModelRegistry.getApiKeyAndHeaders(model)
+  -> pi-ai streamSimple(model, context, options)
+  -> api-registry getApiProvider(model.api)
+  -> built-in or dynamic provider streamSimple
+  -> AssistantMessageEventStream
+  -> AgentEvent / AgentSessionEvent / UI or RPC</code></pre>
+
+<h2>Boundary contracts</h2>
+<div class="grid"><div class="card"><h3><code>Model</code></h3><p>Contains provider identity, API identity, base URL, capabilities, costs, context window, max tokens, and metadata. <code>model.api</code> selects the stream implementation; <code>model.provider</code> drives auth/display/selection.</p></div><div class="card"><h3><code>Context</code></h3><p><code>{ systemPrompt, messages, tools }</code>. Built just before each LLM call after context transforms and custom message conversion.</p></div><div class="card"><h3><code>SimpleStreamOptions</code></h3><p>Carries auth, headers, transport, session id, retry settings, payload/response hooks, reasoning level, thinking budgets, and abort signal.</p></div><div class="card"><h3>Stream protocol</h3><p>Providers emit start/text/thinking/toolcall deltas and terminal done/error events. Runtime failures should be encoded in the stream, not thrown past the loop.</p></div></div>
+
+<h2>Model registry and selection</h2>
+<p><code>ModelRegistry</code> loads built-in generated models plus <code>models.json</code> custom models/overrides. It can register dynamic providers from extensions, reset built-ins during refresh, apply OAuth metadata, and compute available models by auth status.</p>
+<ul>
+<li><code>findInitialModel()</code> prioritizes CLI model/provider, scoped models, saved defaults, provider default models, then any available model.</li>
+<li>CLI resolution searches all known models, not only auth-available ones, so first-time <code>--api-key</code> use can resolve a model before stored auth exists.</li>
+<li>Thinking levels can be specified with suffixes and are clamped to model-supported levels.</li>
+</ul>
+
+<h2>Auth resolution</h2>
+<div class="flow"><ol>
+<li><code>AuthStorage</code> checks runtime API key overrides.</li>
+<li>Then stored API keys in <code>auth.json</code>.</li>
+<li>Then stored OAuth credentials, refreshing if expired.</li>
+<li>Then environment variables or ambient sentinels reported by <code>pi-ai</code> env helpers.</li>
+<li>Then optional fallback resolvers.</li>
+<li><code>ModelRegistry.getApiKeyAndHeaders()</code> merges provider/model headers, provider configured API keys, built-in headers, and optional <code>authHeader</code> behavior.</li>
+</ol></div>
+
+<h2>Provider dispatch</h2>
+<p><code>packages/ai/src/stream.ts</code> imports built-in registration as a side effect. <code>streamSimple()</code> looks up <code>model.api</code> in the API registry and calls the provider's <code>streamSimple</code>. Built-in provider modules are lazy-loaded wrappers, so provider code is only imported on first use. Dynamic providers use the same registry and can be unregistered by source id.</p>
+<div class="callout"><strong>Do not document provider internals as agent architecture.</strong> The integration point is the registry and event stream contract. Individual request payload conversion is provider-local.</div>
+
+<h2>Provider hooks and custom providers</h2>
+<ul>
+<li><code>before_provider_request</code> lets extensions inspect/replace serialized provider payloads.</li>
+<li><code>after_provider_response</code> lets extensions inspect response metadata.</li>
+<li><code>registerProvider()</code> can add models, base URLs, API keys, headers, OAuth login, <code>authHeader</code>, or a custom <code>streamSimple</code>.</li>
+<li>Provider registrations during extension load are queued until <code>ModelRegistry</code> exists; later registrations apply immediately and refresh session model references.</li>
+</ul>
+
+<h2>Invariants</h2>
+<div class="grid"><div class="card"><h3>Agent is provider-agnostic</h3><p>It has no OpenAI/Anthropic/etc. branches. It only consumes <code>pi-ai</code> abstractions.</p></div><div class="card"><h3>Coding-agent owns auth richness</h3><p>The product stream function resolves API keys and headers through <code>ModelRegistry</code> before calling <code>streamSimple</code>.</p></div><div class="card"><h3>Tools cross the same boundary</h3><p><code>Context.tools</code> is provider-neutral. Providers serialize tool schemas and parse tool-call deltas back into Pi's assistant event protocol.</p></div></div>
+
+<h2>Source landmarks</h2><div class="source-list"><ul><li><code>packages/agent/src/agent-loop.ts</code> — LLM call boundary.</li><li><code>packages/agent/src/types.ts</code> — <code>StreamFn</code> and loop options.</li><li><code>packages/coding-agent/src/core/sdk.ts</code> — custom stream function wiring.</li><li><code>packages/coding-agent/src/core/model-registry.ts</code> — model/auth/provider registry.</li><li><code>packages/coding-agent/src/core/auth-storage.ts</code> — API key and OAuth storage.</li><li><code>packages/coding-agent/src/core/model-resolver.ts</code> — model selection.</li><li><code>packages/ai/src/stream.ts</code> — provider dispatch.</li><li><code>packages/ai/src/api-registry.ts</code> — API registry.</li><li><code>packages/ai/src/providers/register-builtins.ts</code> — built-in lazy registration.</li></ul></div>
+<div class="nextprev"><a href="extension-points.html">← Extension points</a><a href="memory-and-tools.html">Memory & tools →</a></div>
+</main></div></body></html>
